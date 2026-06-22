@@ -155,11 +155,13 @@ export default function StatementModal({ isOpen, onClose, transactions }: Statem
                       <td className="py-3.5 px-4">
                         {tx.type === "AutoDCAConfig" ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                            🤖 AutoDCAConfig
+                            <span className="hidden sm:inline">🤖 AutoDCAConfig</span>
+                            <span className="inline sm:hidden">🤖 Auto</span>
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
-                            ✍️ AddTransaction
+                            <span className="hidden sm:inline">✍️ AddTransaction</span>
+                            <span className="inline sm:hidden">✍️ Manual</span>
                           </span>
                         )}
                       </td>

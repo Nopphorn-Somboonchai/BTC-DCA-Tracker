@@ -37,21 +37,23 @@ export default function LoginButton() {
   const displayName = user?.displayName ?? user?.email ?? "ผู้ใช้";
 
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex items-center gap-2 sm:gap-4">
       {user ? (
         <>
           {user.photoURL && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={user.photoURL} alt={displayName} className="w-8 h-8 rounded-full" />
           )}
-          <span className="text-sm text-gray-300">สวัสดี, {displayName}</span>
-          <button onClick={handleLogout} className="px-4 py-2 bg-white text-black rounded-md text-sm font-medium hover:bg-gray-200">
-            ออกจากระบบ
+          <span className="text-sm text-gray-300 hidden md:inline">สวัสดี, {displayName}</span>
+          <button onClick={handleLogout} className="px-3 sm:px-4 py-2 bg-white text-black rounded-md text-sm font-medium hover:bg-gray-200">
+            <span className="hidden sm:inline">ออกจากระบบ</span>
+            <span className="inline sm:hidden">ออก</span>
           </button>
         </>
       ) : (
-        <button onClick={handleLogin} disabled={loading} className="px-4 py-2 bg-[#F7931A] text-white rounded-md text-sm font-medium hover:bg-[#E88318] disabled:opacity-60">
-          {loading ? "กำลังเชื่อมต่อ..." : "เข้าสู่ระบบด้วย Google"}
+        <button onClick={handleLogin} disabled={loading} className="px-3 sm:px-4 py-2 bg-[#F7931A] text-white rounded-md text-sm font-medium hover:bg-[#E88318] disabled:opacity-60">
+          <span className="hidden sm:inline">{loading ? "กำลังเชื่อมต่อ..." : "เข้าสู่ระบบด้วย Google"}</span>
+          <span className="inline sm:hidden">{loading ? "เชื่อมต่อ..." : "เข้าสู่ระบบ"}</span>
         </button>
       )}
     </div>

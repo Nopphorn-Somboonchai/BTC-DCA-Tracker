@@ -395,30 +395,32 @@ export default function BTCDashboard() {
     <div className="min-h-screen bg-[#0F0F0F] text-white p-4 md:p-8 font-sans">
 
       {/* Header Section */}
-      <header className="mb-8 flex flex-col md:flex-row items-start md:items-center justify-between border-b border-gray-800 pb-4 gap-4">
+      <header className="mb-8 flex flex-col md:flex-row items-stretch md:items-center justify-between border-b border-gray-800 pb-4 gap-4">
         <div className="flex items-center gap-3">
           <Bitcoin size={40} color="#F7931A" />
           <h1 className="text-3xl font-bold tracking-tight">BTC DCA Tracker</h1>
         </div>
 
-        <div className="flex flex-col items-end flex-1">
-          <div className="flex items-center gap-3 bg-zinc-900 border border-zinc-700/50 px-4 py-2 rounded-lg shadow-lg">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-            </span>
-            <span className="text-gray-400 text-sm font-medium hidden sm:inline">ราคา Bitkub ตอนนี้:</span>
+        <div className="flex flex-col items-start md:items-end">
+          <div className="flex items-center gap-3 bg-zinc-900 border border-zinc-700/50 px-4 py-2 rounded-lg shadow-lg w-full md:w-auto justify-between md:justify-start">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+              </span>
+              <span className="text-gray-400 text-sm font-medium">ราคา Bitkub ตอนนี้:</span>
+            </div>
 
             <span className="text-[#F7931A] text-2xl font-bold font-mono tracking-tight">
               ฿ {currentBtcPrice > 0 ? currentBtcPrice.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : "กำลังโหลด..."}
             </span>
           </div>
-          <div className="text-xs text-gray-500 mt-2">
+          <div className="text-xs text-gray-500 mt-2 self-start md:self-end">
             อัปเดตล่าสุด: {lastFetchTime || "-"}
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4 justify-start md:justify-end">
           <AutoDCAConfig currentPrice={currentBtcPrice} />
           <AddTransaction currentPrice={currentBtcPrice} />
           <button
@@ -427,7 +429,7 @@ export default function BTCDashboard() {
               setTempGoalBtc(goalBtc.toString());
               setIsSettingsOpen(true);
             }}
-            className="p-2 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800 text-gray-300 hover:text-[#F7931A] rounded-md transition-colors"
+            className="p-2.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800 text-gray-300 hover:text-[#F7931A] rounded-md transition-colors"
             title="การตั้งค่า"
           >
             <Settings className="h-5 w-5" />

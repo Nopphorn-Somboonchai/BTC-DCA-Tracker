@@ -65,12 +65,13 @@ export default function AddTransaction({ currentPrice }: AddTransactionProps) {
         onClick={handleOpen}
         className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 transition-colors"
       >
-        + บันทึกประวัติ DCA
+        <span className="hidden sm:inline">+ บันทึกประวัติ DCA</span>
+        <span className="inline sm:hidden">+ บันทึก DCA</span>
       </button>
 
       {/* Popup Form (จะโชว์เมื่อ isOpen = true) */}
       {isOpen && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-lg shadow-xl w-full max-w-md">
             <h2 className="text-xl font-bold text-white mb-4">บันทึกการลงทุน (DCA)</h2>
             <form onSubmit={handleSave}>

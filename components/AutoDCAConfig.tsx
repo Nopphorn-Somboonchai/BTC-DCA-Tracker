@@ -235,7 +235,17 @@ export default function AutoDCAConfig({ currentPrice }: AutoDCAConfigProps) {
           }`}
       >
         <RefreshCw size={16} className={isActive ? "animate-spin-slow" : ""} />
-        {isActive ? "🤖 บอท Auto DCA กำลังรัน" : "+ ตั้งค่า Auto DCA"}
+        {isActive ? (
+          <>
+            <span className="hidden sm:inline">🤖 บอท Auto DCA กำลังรัน</span>
+            <span className="inline sm:hidden">🤖 Auto DCA</span>
+          </>
+        ) : (
+          <>
+            <span className="hidden sm:inline">+ ตั้งค่า Auto DCA</span>
+            <span className="inline sm:hidden">+ Auto DCA</span>
+          </>
+        )}
       </button>
 
       {/* Modal หน้าต่างฟอร์มตั้งค่า */}
