@@ -8,6 +8,7 @@ import DashboardStats from "../components/dashboard/DashboardStats";
 import PortfolioChart from "../components/dashboard/PortfolioChart";
 import GoalTracker from "../components/dashboard/GoalTracker";
 import SettingsModal from "../components/dashboard/SettingsModal";
+import Footer from "../components/Footer";
 
 export default function BTCDashboard() {
   const {
@@ -112,6 +113,7 @@ export default function BTCDashboard() {
           transactions={transactions}
         />
       )}
+      <Footer />
     </div>
   );
 }
