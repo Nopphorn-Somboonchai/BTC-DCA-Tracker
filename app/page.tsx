@@ -1,13 +1,12 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
-import { collection, query, where, onSnapshot, doc, getDoc, setDoc } from "firebase/firestore";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { collection, query, where, onSnapshot, doc, getDoc, setDoc, addDoc, Timestamp, getDocs, deleteDoc } from "firebase/firestore";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { db, auth } from "../lib/firebase"; // เช็ก Path ให้ตรงกับที่คุณใช้
 import React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Bitcoin, TrendingUp, Wallet, Target, ArrowUpRight, Pencil, Settings } from "lucide-react";
+import { Bitcoin, TrendingUp, Wallet, Target, ArrowUpRight, Pencil, Settings, RefreshCw } from "lucide-react";
 import AddTransaction from "../components/AddTransaction";
-import AutoDCAConfig from "../components/AutoDCAConfig";
 import LoginButton from "../components/ui/LoginButton"; // แก้ไข Path ป้องกันจอแดง
 import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
 import { Progress } from "../components/ui/progress";
@@ -25,7 +24,7 @@ const mockData = [
 
 export default function BTCDashboard() {
   // สร้างตัวแปรเก็บค่ารวมของพอร์ต
-  const [transactions, setTransactions] = useState<{ id: string; amountTHB: number; btcAmount: number; btcPriceAtBuy: number; date: Date; type?: string }[]>([]);
+  const [transactions, setTransactions] = useState<{ id: string; amountTHB: number; btcAmount: number; btcPriceAtBuy: number; date: Date; type?: string; orderId?: string }[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [totalInvested, setTotalInvested] = useState(0);
   const [isStatementOpen, setIsStatementOpen] = useState(false);
@@ -50,6 +49,8 @@ export default function BTCDashboard() {
   // 🟢 ยอดเงินจริงจากบัญชี Bitkub
   const [actualBtcBalance, setActualBtcBalance] = useState(0);
   const [actualThbBalance, setActualThbBalance] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const hasAutoSyncedRef = useRef(false);
 
   // 🌟 ระบบคำนวณพอร์ตเชื่อมโยงข้อมูลจริงและทุนตั้งต้น
   const effectiveBtc = actualBtcBalance > 0 ? actualBtcBalance : totalBtc;
@@ -164,6 +165,101 @@ export default function BTCDashboard() {
     }
   };
 
+  interface SyncedBitkubOrder {
+    orderId: string;
+    amountTHB: number;
+    btcAmount: number;
+    btcPriceAtBuy: number;
+    date: string;
+  }
+
+  // 🟢 ฟังก์ชันซิงก์ข้อมูลประวัติจาก Bitkub และป้องกันการเขียนซ้ำ (Deduplication)
+  const syncBitkubHistory = async (
+    customExistingTransactions?: typeof transactions,
+    currentUserObject?: User | null
+  ): Promise<{ count: number; message: string }> => {
+    const activeUser = currentUserObject || user || auth.currentUser;
+    if (!activeUser) {
+      throw new Error("กรุณาล็อกอินเพื่อดำเนินการซิงก์ประวัติ");
+    }
+
+    try {
+      const res = await fetch('/api/bitkub-history');
+      if (!res.ok) {
+        let errorMessage = `ดึงประวัติจาก API ล้มเหลว (HTTP Status: ${res.status})`;
+        try {
+          const errData = await res.json();
+          if (errData && errData.message) {
+            errorMessage += `: ${errData.message}`;
+          }
+        } catch (_) {}
+        throw new Error(errorMessage);
+      }
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.message || "ดึงประวัติการสั่งซื้อล้มเหลว");
+      }
+
+      const bitkubOrders: SyncedBitkubOrder[] = data.result || [];
+
+      // ดึงรหัสอ้างอิงของธุรกรรม Bitkub เดิมที่มีอยู่แล้วในระบบเพื่อเทียบไม่ให้ซ้ำ
+      const targetTxs = customExistingTransactions || transactions;
+      const existingOrderIds = new Set(
+        targetTxs
+          .filter(tx => tx.type === 'bitkub' && tx.orderId)
+          .map(tx => tx.orderId as string)
+      );
+
+      // กรองเฉพาะรายการคำสั่งซื้อใหม่ที่ยังไม่เคยมีใน Firestore
+      const newOrders = bitkubOrders.filter(
+        (order) => !existingOrderIds.has(order.orderId)
+      );
+
+      if (newOrders.length === 0) {
+        return { count: 0, message: "ข้อมูลประวัติการลงทุนเป็นปัจจุบันอยู่แล้ว" };
+      }
+
+      // บันทึกธุรกรรมลงใน Firestore
+      const writePromises = newOrders.map((order) => {
+        return addDoc(collection(db, "transactions"), {
+          userId: activeUser.uid,
+          amountTHB: order.amountTHB,
+          btcAmount: order.btcAmount,
+          btcPriceAtBuy: order.btcPriceAtBuy,
+          date: Timestamp.fromDate(new Date(order.date)),
+          type: "bitkub",
+          orderId: order.orderId,
+        });
+      });
+
+      await Promise.all(writePromises);
+
+      return {
+        count: newOrders.length,
+        message: `ซิงก์สำเร็จ เพิ่มประวัติการซื้อใหม่จำนวน ${newOrders.length} รายการ`
+      };
+
+    } catch (error) {
+      console.error("เกิดข้อผิดพลาดในการซิงก์ข้อมูล Bitkub:", error);
+      throw error;
+    }
+  };
+
+  // 🟢 ฟังก์ชันผูกปุ่มกดซิงก์ข้อมูลเพื่อแจ้ง Feedback แก่ผู้ใช้งาน
+  const handleSyncHistory = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await syncBitkubHistory();
+      alert(res.message);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "เกิดข้อผิดพลาดในการซิงก์ข้อมูล";
+      alert(errorMessage);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   // ดึงราคาจาก Bitkub API (WebSocket)
   useEffect(() => {
     let ws: WebSocket;
@@ -207,34 +303,40 @@ export default function BTCDashboard() {
         unsubscribeSnapshot();
         unsubscribeSnapshot = null;
       }
-
       if (user) {
         setUser(user);
+        hasAutoSyncedRef.current = false; // รีเซ็ต Ref ทุกครั้งที่มีการล็อกอินใหม่
         fetchMyBalance();
         const q = query(collection(db, "transactions"), where("userId", "==", user.uid));
 
         unsubscribeSnapshot = onSnapshot(q, (querySnapshot) => {
           let sumInvested = 0;
           let sumBtc = 0;
-          const txList: { id: string; amountTHB: number; btcAmount: number; btcPriceAtBuy: number; date: Date; type?: string }[] = [];
+          const txList: { id: string; amountTHB: number; btcAmount: number; btcPriceAtBuy: number; date: Date; type?: string; orderId?: string }[] = [];
 
           querySnapshot.forEach((doc) => {
             const data = doc.data();
-            
+            const type = data.type || "AddTransaction";
+
+            // ข้ามรายการจำลอง AutoDCA ในแดชบอร์ดจริง
+            if (type === "AutoDCAConfig") {
+              return;
+            }
+
             // ป้องกันปัญหา Type mismatch (เช่น string จาก Firebase) และรองรับชื่อ Field ทั้งแบบพิมพ์เล็ก/ใหญ่/ย่อ
             const amountTHB = Number(
-              data.amountTHB !== undefined ? data.amountTHB : 
-              (data.amountThb !== undefined ? data.amountThb : 
-              (data.amount !== undefined ? data.amount : 0))
+              data.amountTHB !== undefined ? data.amountTHB :
+                (data.amountThb !== undefined ? data.amountThb :
+                  (data.amount !== undefined ? data.amount : 0))
             );
             const btcAmount = Number(
-              data.btcAmount !== undefined ? data.btcAmount : 
-              (data.btc !== undefined ? data.btc : 0)
+              data.btcAmount !== undefined ? data.btcAmount :
+                (data.btc !== undefined ? data.btc : 0)
             );
             const btcPriceAtBuy = Number(
-              data.btcPriceAtBuy !== undefined ? data.btcPriceAtBuy : 
-              (data.btcPrice !== undefined ? data.btcPrice : 
-              (data.price !== undefined ? data.price : 0))
+              data.btcPriceAtBuy !== undefined ? data.btcPriceAtBuy :
+                (data.btcPrice !== undefined ? data.btcPrice :
+                  (data.price !== undefined ? data.price : 0))
             );
 
             sumInvested += amountTHB;
@@ -258,8 +360,6 @@ export default function BTCDashboard() {
               txDate = new Date();
             }
 
-            const type = data.type || "AddTransaction";
-
             txList.push({
               id: doc.id,
               amountTHB,
@@ -267,6 +367,7 @@ export default function BTCDashboard() {
               btcPriceAtBuy,
               date: txDate,
               type,
+              orderId: data.orderId || "",
             });
           });
 
@@ -276,6 +377,21 @@ export default function BTCDashboard() {
           setTransactions(txList);
           setTotalInvested(sumInvested);
           setTotalBtc(sumBtc);
+
+          // ซิงก์ประวัติคำสั่งซื้อจาก Bitkub โดยอัตโนมัติ 1 ครั้งหลังจากโหลดข้อมูลเสร็จสิ้นในครั้งแรก
+          if (!hasAutoSyncedRef.current) {
+            hasAutoSyncedRef.current = true;
+            // เรียกใช้การซิงก์ประวัติแบบเงียบ (Silent background sync) ส่ง Fresh list และ User เพื่อความสดใหม่ของข้อมูล
+            syncBitkubHistory(txList, user)
+              .then((res) => {
+                if (res.count > 0) {
+                  console.log(`🤖 Auto-sync success: ${res.message}`);
+                }
+              })
+              .catch((err) => {
+                console.error("🤖 Auto-sync failed:", err);
+              });
+          }
         });
 
         // ดึงการตั้งค่าจาก Firestore (เป้าหมาย และ ทุนตั้งต้น)
@@ -351,6 +467,7 @@ export default function BTCDashboard() {
         unsubscribeSnapshot();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -391,6 +508,50 @@ export default function BTCDashboard() {
     }
   };
 
+  const [isPurging, setIsPurging] = useState(false);
+
+  const handlePurgeSimulatedData = async () => {
+    const activeUser = user || auth.currentUser;
+    if (!activeUser) {
+      alert("กรุณาล็อกอินก่อนดำเนินการล้างข้อมูลครับ");
+      return;
+    }
+
+    const isConfirmed = window.confirm(
+      "⚠️ คุณต้องการลบข้อมูลแผนการลงทุน Auto DCA และธุรกรรมจำลองทั้งหมดออกจากฐานข้อมูลใช่หรือไม่?\n\nการดำเนินการนี้ไม่สามารถย้อนกลับได้ และจะลบข้อมูลธุรกรรมจำลองทั้งหมดออกจากระบบคลาวด์อย่างถาวร"
+    );
+    if (!isConfirmed) return;
+
+    setIsPurging(true);
+    try {
+      // 1. ลบคอนฟิก Auto DCA จาก auto_dca_configs
+      const configRef = doc(db, "auto_dca_configs", activeUser.uid);
+      await deleteDoc(configRef);
+
+      // 2. ดึงธุรกรรมทั้งหมดที่เป็น AutoDCAConfig เพื่อนำมาลบ
+      const q = query(
+        collection(db, "transactions"),
+        where("userId", "==", activeUser.uid),
+        where("type", "==", "AutoDCAConfig")
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const deletePromises: Promise<void>[] = [];
+      querySnapshot.forEach((docSnap) => {
+        deletePromises.push(deleteDoc(doc(db, "transactions", docSnap.id)));
+      });
+
+      await Promise.all(deletePromises);
+      alert("ล้างข้อมูลจำลอง Auto DCA ทั้งหมดออกจากฐานข้อมูลเรียบร้อยแล้วครับ 🤖✨");
+      setIsSettingsOpen(false);
+    } catch (err) {
+      console.error("เกิดข้อผิดพลาดในการล้างข้อมูลจำลอง:", err);
+      alert("เกิดข้อผิดพลาดในการล้างข้อมูลจำลอง กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setIsPurging(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0F0F0F] text-white p-4 md:p-8 font-sans">
 
@@ -421,8 +582,18 @@ export default function BTCDashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:gap-4 justify-start md:justify-end">
-          <AutoDCAConfig currentPrice={currentBtcPrice} />
           <AddTransaction currentPrice={currentBtcPrice} />
+          {user && (
+            <button
+              onClick={handleSyncHistory}
+              disabled={isSyncing}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-600 disabled:bg-orange-800 text-white rounded-md text-sm font-medium hover:bg-orange-700 disabled:opacity-50 transition-colors"
+              title="ซิงก์ประวัติคำสั่งซื้อทั้งหมดจากบัญชี Bitkub"
+            >
+              <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+              <span>{isSyncing ? "กำลังซิงก์ข้อมูล..." : "ซิงก์ประวัติ Bitkub"}</span>
+            </button>
+          )}
           <button
             onClick={() => {
               setTempInitialCapital(initialCapital.toString());
@@ -678,6 +849,24 @@ export default function BTCDashboard() {
                 </div>
               </div>
 
+              {/* Danger Zone */}
+              {user && (
+                <div className="mt-6 pt-6 border-t border-red-950/40 mb-6">
+                  <h3 className="text-sm font-semibold text-red-500 mb-2">Danger Zone (พื้นที่ควบคุม)</h3>
+                  <p className="text-xs text-gray-500 mb-3 leading-relaxed">
+                    เมื่อระบบเปลี่ยนไปดึงประวัติการลงทุนจริงจาก Bitkub คุณสามารถล้างข้อมูลจำลองบอท Auto DCA และประวัติการทำรายการจำลองเพื่อไม่ให้ข้อมูลคลาดเคลื่อนได้ที่นี่
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handlePurgeSimulatedData}
+                    disabled={isPurging}
+                    className="w-full py-2.5 px-4 bg-red-900/20 hover:bg-red-900 text-red-400 hover:text-white border border-red-900/30 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
+                  >
+                    {isPurging ? "กำลังล้างข้อมูล..." : "🗑️ ล้างประวัติธุรกรรมจำลองทั้งหมด"}
+                  </button>
+                </div>
+              )}
+
               <div className="flex justify-end gap-3 border-t border-zinc-800 pt-4">
                 <button
                   type="button"
@@ -699,11 +888,13 @@ export default function BTCDashboard() {
       )}
 
       {/* Statement Modal Overlay */}
-      <StatementModal
-        isOpen={isStatementOpen}
-        onClose={() => setIsStatementOpen(false)}
-        transactions={transactions}
-      />
+      {isStatementOpen && (
+        <StatementModal
+          isOpen={isStatementOpen}
+          onClose={() => setIsStatementOpen(false)}
+          transactions={transactions}
+        />
+      )}
     </div>
   );
 }

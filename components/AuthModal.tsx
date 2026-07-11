@@ -27,10 +27,11 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       onClose(); // ปิด modal เมื่อล็อกอินสำเร็จ
-    } catch (err: any) {
+    } catch (err) {
       console.error("Firebase Login Error:", err);
+      const firebaseError = err as { code?: string; message?: string };
       // แปลข้อผิดพลาดของ Firebase เป็นภาษาไทยเพื่อให้ผู้ใช้เข้าใจง่าย
-      switch (err.code) {
+      switch (firebaseError.code) {
         case "auth/invalid-email":
           setError("รูปแบบอีเมลไม่ถูกต้อง");
           break;
@@ -50,7 +51,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           setError("ป้อนรหัสผิดบ่อยเกินไป บัญชีถูกล็อกชั่วคราว กรุณาลองใหม่ภายหลัง");
           break;
         default:
-          setError(err.message || "เกิดข้อผิดพลาดในการเข้าสู่ระบบ");
+          setError(firebaseError.message || "เกิดข้อผิดพลาดในการเข้าสู่ระบบ");
       }
     } finally {
       setLoading(false);

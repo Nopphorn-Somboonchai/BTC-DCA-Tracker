@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
 import { X, FileText, Pencil, Trash2 } from "lucide-react";
 import { doc, deleteDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
@@ -12,6 +12,7 @@ interface Transaction {
   btcPriceAtBuy: number;
   date: Date;
   type?: string;
+  orderId?: string;
 }
 
 interface StatementModalProps {
@@ -22,13 +23,6 @@ interface StatementModalProps {
 
 export default function StatementModal({ isOpen, onClose, transactions }: StatementModalProps) {
   const [isEditMode, setIsEditMode] = useState(false);
-
-  // Reset edit mode when modal is closed
-  useEffect(() => {
-    if (!isOpen) {
-      setIsEditMode(false);
-    }
-  }, [isOpen]);
 
   const handleDelete = async (id: string) => {
     const isConfirmed = window.confirm("คุณต้องการลบรายการนี้ใช่หรือไม่?");
@@ -126,7 +120,7 @@ export default function StatementModal({ isOpen, onClose, transactions }: Statem
               <FileText className="h-16 w-16 text-zinc-600 mb-4 stroke-1" />
               <h3 className="text-lg font-bold text-zinc-300">ไม่มีข้อมูลประวัติ DCA</h3>
               <p className="text-sm text-zinc-500 max-w-xs mt-1">
-                กรุณาบันทึกประวัติการลงทุนครั้งแรกของคุณ หรือเปิดบอท Auto DCA เพื่อดูรายการประวัติที่นี่
+                กรุณาบันทึกประวัติการลงทุนของคุณ หรือซิงก์ประวัติการซื้อขายจากบัญชี Bitkub เพื่อแสดงรายการประวัติที่นี่
               </p>
             </div>
           ) : (
@@ -153,10 +147,10 @@ export default function StatementModal({ isOpen, onClose, transactions }: Statem
                         </div>
                       </td>
                       <td className="py-3.5 px-4">
-                        {tx.type === "AutoDCAConfig" ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                            <span className="hidden sm:inline">🤖 AutoDCAConfig</span>
-                            <span className="inline sm:hidden">🤖 Auto</span>
+                        {tx.type === "bitkub" ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                            <span className="hidden sm:inline">🍊 Bitkub API</span>
+                            <span className="inline sm:hidden">🍊 Bitkub</span>
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
